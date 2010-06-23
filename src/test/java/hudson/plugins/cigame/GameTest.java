@@ -1,18 +1,20 @@
 package hudson.plugins.cigame;
 
-import static org.mockito.Mockito.*;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+import hudson.model.User;
+import hudson.plugins.cigame.Game.UserScore;
 
 import java.util.Arrays;
 import java.util.List;
 
-import hudson.model.User;
-import hudson.plugins.cigame.LeaderBoardAction.UserScore;
-
 import org.junit.Test;
 
-public class LeaderBoardActionTest {
+public class GameTest {
 
     @Test
     public void assertUserScoreAreRestWhenResettingScore() throws Exception {
@@ -22,8 +24,29 @@ public class LeaderBoardActionTest {
         when(userWithProperty.getProperty(UserScoreProperty.class)).thenReturn(property);
         when(userWithoutProperty.getProperty(UserScoreProperty.class)).thenReturn(null);
         
-        new LeaderBoardAction().doResetScores(Arrays.asList(userWithoutProperty, userWithProperty));        
+        createGame().doResetScores(Arrays.asList(userWithoutProperty, userWithProperty));        
         assertThat(property.getScore(), is(0d));
+        
+        verify(userWithoutProperty).getProperty(UserScoreProperty.class);
+        verifyNoMoreInteractions(userWithoutProperty);
+        verify(userWithProperty).getProperty(UserScoreProperty.class);
+        verify(userWithProperty).save();
+        verifyNoMoreInteractions(userWithProperty);
+    }
+    
+    @Test
+    public void assertUserScoreAreNotResetWhenResettingCustomGame() throws Exception {
+        User userWithProperty = mock(User.class);
+        User userWithoutProperty = mock(User.class);
+        UserScoreProperty property = new UserScoreProperty(2.0, true);
+        property.getCustomGameScores().put("id", 15d);
+        when(userWithProperty.getProperty(UserScoreProperty.class)).thenReturn(property);
+        when(userWithoutProperty.getProperty(UserScoreProperty.class)).thenReturn(null);
+        
+        new CustomGame("id", "name", "jobNames").doResetScores(Arrays.asList(userWithoutProperty, userWithProperty));        
+        assertThat(property.getScore(), is(2d));
+        assertThat(property.getCustomGameScores().containsKey("id"), is(true));
+        assertThat(property.getCustomGameScores().get("id"), is(0d));
         
         verify(userWithoutProperty).getProperty(UserScoreProperty.class);
         verifyNoMoreInteractions(userWithoutProperty);
@@ -41,7 +64,7 @@ public class LeaderBoardActionTest {
         when(userOne.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(2.0, true));
         when(userTwo.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(5.0, true));
         
-        List<UserScore> scores = new LeaderBoardAction().getUserScores(Arrays.asList(userOne, userTwo), false);
+        List<UserScore> scores = createGame().getUserScores(Arrays.asList(userOne, userTwo), false);
         assertThat(scores.size(), is(1));
         assertThat(scores.get(0).getScore(), is(2d));
     }
@@ -55,7 +78,7 @@ public class LeaderBoardActionTest {
         when(userOne.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(5.0, true));
         when(userTwo.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(2.0, true));
         
-        List<UserScore> scores = new LeaderBoardAction().getUserScores(Arrays.asList(userOne, userTwo), true);
+        List<UserScore> scores = createGame().getUserScores(Arrays.asList(userOne, userTwo), true);
         assertThat(scores.size(), is(2));
         assertThat(scores.get(0).getScore(), is(5d));
         assertThat(scores.get(1).getScore(), is(2d));
@@ -70,11 +93,15 @@ public class LeaderBoardActionTest {
         when(userOne.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(1.0, true));
         when(userTwo.getProperty(UserScoreProperty.class)).thenReturn(new UserScoreProperty(2.0, true));
         
-        List<UserScore> scores = new LeaderBoardAction().getUserScores(Arrays.asList(userOne, userTwo), true);
+        List<UserScore> scores = createGame().getUserScores(Arrays.asList(userOne, userTwo), true);
         assertThat(scores.size(), is(2));
         assertThat(scores.get(0).getScore(), is(2d));
         assertThat(scores.get(0).getUser().getId(), is("John"));
         assertThat(scores.get(1).getScore(), is(1d));
         assertThat(scores.get(1).getUser().getId(), is("Andy"));
+    }
+    
+    private Game createGame() {
+        return new GameDescriptor.DefaultGame();
     }
 }

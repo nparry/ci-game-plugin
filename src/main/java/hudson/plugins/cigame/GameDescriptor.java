@@ -1,11 +1,8 @@
 package hudson.plugins.cigame;
 
-import net.sf.json.JSONObject;
-
-import org.kohsuke.stapler.StaplerRequest;
-
 import hudson.Extension;
 import hudson.model.AbstractProject;
+import hudson.model.User;
 import hudson.plugins.cigame.model.RuleBook;
 import hudson.plugins.cigame.model.RuleSet;
 import hudson.plugins.cigame.rules.build.BuildRuleSet;
@@ -19,6 +16,17 @@ import hudson.plugins.cigame.rules.unittesting.UnitTestingRuleSet;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Publisher;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import net.sf.json.JSONObject;
+
+import org.kohsuke.stapler.StaplerRequest;
+
 @Extension
 public class GameDescriptor extends BuildStepDescriptor<Publisher> {
 
@@ -27,6 +35,7 @@ public class GameDescriptor extends BuildStepDescriptor<Publisher> {
     
     private transient RuleBook rulebook;
     private boolean namesAreCaseSensitive = true;
+    private List<CustomGame> customGames;
 
     public GameDescriptor() {
         super(GamePublisher.class);
@@ -75,6 +84,7 @@ public class GameDescriptor extends BuildStepDescriptor<Publisher> {
     public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
         req.bindJSON(this, json);
         save();
+        removeObsoleteGameScores();
         return true;
     }
 
@@ -84,6 +94,78 @@ public class GameDescriptor extends BuildStepDescriptor<Publisher> {
 
     public void setNamesAreCaseSensitive(boolean namesAreCaseSensitive) {
         this.namesAreCaseSensitive = namesAreCaseSensitive;
+    }
+    
+    public List<CustomGame> getCustomGames() {
+        if (customGames == null) {
+            customGames = new ArrayList<CustomGame>();
+        }
+        return customGames;
+    }
+    
+    public void setCustomGames(List<CustomGame> customGames) {
+        this.customGames = customGames;
+    }
+    
+    public Game getDefaultGame() {
+        return new DefaultGame();
+    }
+    
+    public List<Game> getAllGames() {
+        List<Game> games = new ArrayList<Game>();
+        games.add(getDefaultGame());
+        games.addAll(getCustomGames());
+        return games;
+    }
+    
+    public List<Game> getApplicableGames(AbstractProject project) {
+        List<Game> applicable = new ArrayList<Game>();
+        applicable.add(getDefaultGame());
+        for (CustomGame customGame : getCustomGames()) {
+            if (customGame.isApplicable(project)) {
+                applicable.add(customGame);
+            }
+        }
+        
+        return applicable;
+    }
+    
+    private void removeObsoleteGameScores() {
+        removeObsoleteGameScores(User.getAll());
+    }
+    
+    void removeObsoleteGameScores(Collection<User> users) {
+        Set<String> currentGameIds = new HashSet<String>();
+        for (Game game : getCustomGames()) {
+            currentGameIds.add(game.getId());
+        }
+        
+        for (User user : users) {
+            UserScoreProperty property = user.getProperty(UserScoreProperty.class);
+            if (property != null) {
+                if (property.removeObsoleteGameScores(currentGameIds)) {
+                    try {
+                        user.save();
+                    } catch (IOException e) {
+                        // oh well, a user will have stale data
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * This lets the multi-game code handle data persisted from older versions
+     * of the CI-game.
+     */
+    static class DefaultGame extends Game {
+        public String getId() {
+            return getName();
+        }
+        
+        public String getName() {
+            return "Default game";
+        }
     }
 
     @Override

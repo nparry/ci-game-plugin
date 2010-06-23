@@ -3,5 +3,23 @@
     <f:entry title="${%cigame.namesarecasesensitive}" help="/plugin/ci-game/namesAreCaseSensitive.html">
       <f:checkbox field="namesAreCaseSensitive"/>
     </f:entry>
+    <f:entry title="${%cigame.customgames}" help="/plugin/ci-game/customGames.html">
+      <f:repeatable var="custom" items="${instance.customGames}" name="customGames">
+        <table width="100%">
+          <input type="hidden" name="id" value="${custom.id}" />
+          <f:entry title="${%cigame.customGameName}">
+            <f:textbox name="name" value="${custom.name}" />
+          </f:entry>
+          <f:entry title="${%cigame.customGameJobs}">
+            <f:textbox name="jobNames" value="${custom.jobNames}" />
+          </f:entry>
+          <f:entry>
+            <div align="right">
+              <input type="button" value="Delete" class="repeatable-delete" style="margin-left: 1em;" />
+            </div>
+          </f:entry>
+        </table>
+      </f:repeatable>
+    </f:entry>
   </f:section>
 </j:jelly>

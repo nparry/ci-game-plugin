@@ -2,6 +2,7 @@ package hudson.plugins.cigame;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -42,7 +43,12 @@ public class GamePublisher extends Notifier {
     public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
             BuildListener listener) throws InterruptedException, IOException {
 
-        perform(build, getDescriptor().getRuleBook(), getDescriptor().getNamesAreCaseSensitive(), listener);
+        perform(build,
+                getDescriptor().getRuleBook(),
+                getDescriptor().getApplicableGames(build.getProject()),
+                getDescriptor().getNamesAreCaseSensitive(),
+                listener);
+
         return true;
     }
 
@@ -50,12 +56,13 @@ public class GamePublisher extends Notifier {
      * Calculates score from the build and rule book and adds a Game action to the build.
      * @param build build to calculate points for
      * @param ruleBook rules used in calculation
+     * @param games games which should be updated
      * @param usernameIsCasesensitive user names in Hudson are case insensitive.
      * @param listener the build listener
      * @return true, if any user scores were updated; false, otherwise
      * @throws IOException thrown if there was a problem setting a user property
      */
-    boolean perform(AbstractBuild<?, ?> build, RuleBook ruleBook, boolean usernameIsCasesensitive, BuildListener listener) throws IOException {
+    boolean perform(AbstractBuild<?, ?> build, RuleBook ruleBook, Collection<? extends Game> games, boolean usernameIsCasesensitive, BuildListener listener) throws IOException {
         ScoreCard sc = new ScoreCard();
         sc.record(build, ruleBook, listener);
 
@@ -82,7 +89,7 @@ public class GamePublisher extends Notifier {
         	}
         }
         
-        return updateUserScores(players, sc.getTotalPoints());
+        return updateUserScores(players, sc.getTotalPoints(), games);
     }
 
     /**
@@ -93,18 +100,17 @@ public class GamePublisher extends Notifier {
      * @throws IOException thrown if the property could not be added to the user object.
      * @return true, if any user scores was updated; false, otherwise
      */
-    private boolean updateUserScores(Set<User> players, double score) throws IOException {
+    private boolean updateUserScores(Set<User> players, double score, Collection<? extends Game> games) throws IOException {
         if (score != 0) {
             for (User user : players) {
-                UserScoreProperty property = user.getProperty(UserScoreProperty.class);
-                if (property == null) {
-                    property = new UserScoreProperty();
-                    user.addProperty(property);
+                boolean changed = false;
+                for (Game game : games) {
+                    changed |= game.adjustScoreForUser(score, user);
                 }
-                if (property.isParticipatingInGame()) {
-                    property.setScore(property.getScore() + score);
+                
+                if (changed) {
+                    user.save();
                 }
-                user.save();
             }
         }
         return (!players.isEmpty());

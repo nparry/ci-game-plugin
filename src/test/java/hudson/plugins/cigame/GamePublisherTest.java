@@ -1,13 +1,12 @@
 package hudson.plugins.cigame;
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-import static org.hamcrest.CoreMatchers.*;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 import hudson.model.AbstractBuild;
 import hudson.model.Action;
 import hudson.model.User;
@@ -18,11 +17,19 @@ import hudson.plugins.cigame.model.RuleSet;
 import hudson.scm.ChangeLogSet;
 import hudson.scm.ChangeLogSet.Entry;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 import org.junit.Test;
 import org.jvnet.hudson.test.Bug;
 
 @SuppressWarnings("unchecked")
 public class GamePublisherTest {
+    
+    private static final Collection<? extends Game> NO_CUSTOM_GAMES = Collections.singleton(new GameDescriptor.DefaultGame());
 
     @Test
     public void assertScoreCardActionIsAddedToBuild() throws Exception {
@@ -30,7 +37,7 @@ public class GamePublisherTest {
         List<Action> actions = mock(List.class);
         when(build.getActions()).thenReturn(actions);
 
-        assertThat(new GamePublisher().perform(build, new RuleBook(), true, null), is(false));
+        assertThat(new GamePublisher().perform(build, new RuleBook(), NO_CUSTOM_GAMES, true, null), is(false));
         
         verify(build).getActions();
         verify(actions).add(isA(ScoreCardAction.class));
@@ -45,8 +52,23 @@ public class GamePublisherTest {
         UserScoreProperty userScoreProperty = new UserScoreProperty(10, true);
         mockChangeSetInBuild(build, createUser(userScoreProperty));
 
-        assertThat(new GamePublisher().perform(build, createRuleBook(5d), true, null), is(true));
+        assertThat(new GamePublisher().perform(build, createRuleBook(5d), NO_CUSTOM_GAMES, true, null), is(true));
         assertThat(userScoreProperty.getScore(), is(15d));
+    }
+    
+    @Test
+    public void assertPointsAreToExistingUserScorePropertyForCustomGame() throws Exception {
+        AbstractBuild build = mock(AbstractBuild.class);
+        UserScoreProperty userScoreProperty = new UserScoreProperty(10, true);
+        mockChangeSetInBuild(build, createUser(userScoreProperty));
+        
+        List<Game> games = new ArrayList<Game>();
+        games.addAll(NO_CUSTOM_GAMES);
+        games.add(new CustomGame("id", "name", "jobs"));
+
+        assertThat(new GamePublisher().perform(build, createRuleBook(5d), games, true, null), is(true));
+        assertThat(userScoreProperty.getScore(), is(15d));
+        assertThat(userScoreProperty.getCustomGameScores().get("id"), is(5d));
     }
 
     @Test
@@ -55,10 +77,10 @@ public class GamePublisherTest {
         User userWithoutProperty = createUser(null);        
         mockChangeSetInBuild(build, userWithoutProperty);
 
-        assertThat(new GamePublisher().perform(build, createRuleBook(5d), true, null), is(true));
+        assertThat(new GamePublisher().perform(build, createRuleBook(5d), NO_CUSTOM_GAMES, true, null), is(true));
         verify(userWithoutProperty).addProperty(new UserScoreProperty(5, true));
     }
-
+    
     @Bug(4470)
     @Test
     public void assertThatUserDoesNotReciveDoublePointsIfUserExistInSeveralChangeSetEntries() throws Exception {
@@ -67,7 +89,7 @@ public class GamePublisherTest {
         User user = createUser(property);        
         mockChangeSetInBuild(build, user, user);
 
-        assertThat(new GamePublisher().perform(build, createRuleBook(5d), true, null), is(true));
+        assertThat(new GamePublisher().perform(build, createRuleBook(5d), NO_CUSTOM_GAMES, true, null), is(true));
         assertThat(property.getScore(), is(15d));
     }
     
@@ -78,7 +100,7 @@ public class GamePublisherTest {
         UserScoreProperty propertyTwo = new UserScoreProperty(20, true);
         mockChangeSetInBuild(build, createUser(propertyOne, "name"), createUser(propertyTwo, "NAME"));
 
-        assertThat(new GamePublisher().perform(build, createRuleBook(5d), false, null), is(true));
+        assertThat(new GamePublisher().perform(build, createRuleBook(5d), NO_CUSTOM_GAMES, false, null), is(true));
         assertThat(propertyOne.getScore(), is(15d));
         assertThat("Points were added to both users", propertyTwo.getScore(), is(20d));
     }
@@ -119,6 +141,7 @@ public class GamePublisherTest {
         if (property != null) {
             when(user.getProperty(UserScoreProperty.class)).thenReturn(property);
         }
+        
         return user;
     }
     

@@ -2,7 +2,18 @@
 	<l:layout title="${%Leaderboard.title}">
 	<st:include page="sidepanel.jelly"/>
     <l:main-panel>
-       	<h1>${%Leaderboard.title}</h1>
+        <h1>${%Leaderboard.title}</h1>
+       	<form method="get" name="gameselector" action="">
+            ${%Leaderboard.gameChoices}
+            <!-- TODO: This onchange is terrible, do something better -->
+            <select onchange="this.form.action = window.location.pathname.replace(/cigame\/.*/, 'cigame/gameById/' + this.value); this.form.submit()">
+                <j:forEach var="game" items="${it.gameChoices}">
+                    <f:option value="${game.id}" selected="${game.id eq it.id}">
+                        ${game.name}
+                    </f:option>
+                </j:forEach>
+            </select>
+        </form>
 		<div>
         	<table class="pane sortable" style="width:50%">	
         		<tr>
